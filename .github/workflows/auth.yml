@@ -1,0 +1,45 @@
+name: deploy-auth
+
+# ¿a qué eventos estamos atentos?
+on:
+  push:
+    # a las ramas main (por si acaso) y master
+    branches:
+      - main
+      - master
+    
+    # cuando hacemos algún cambio en relación al contenedor
+    paths:
+      - 'packages/auth/**'
+
+
+defaults:
+  # ejecutar todo dentro del directorio 'auth'
+  run:
+    working-directory: packages/auth
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - run: npm install
+      - run: npm run build
+
+      # nos da acceso a la CLI de AWS
+      - uses: shinyinc/action-aws-cli@v1.2
+
+      # sincronizamos el contenido de dist que se genera automáticamente
+      # al hacer 'npm run build' con un cubo de s3 de AWS
+      - run: aws s3 sync dist s3://${{ secrets.AWS_S3_BUCKET_NAME }}/auth/latest
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: eu-west-3
+
+      - run: aws cloudfront create-invalidation --distribution-id ${{ secrets.AWS_DISTRIBUTION_ID }} --paths "/auth/latest/remoteEntry.js"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: eu-west-3
